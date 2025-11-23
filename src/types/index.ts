@@ -58,8 +58,8 @@ export interface CreateTaskDto {
   assignee_id?: string;
   labels?: string[];
   tags?: string[];
-  due_date?: string;
-  start_date?: string;
+  due_date?: string; // ISO date string
+  start_date?: string; // ISO date string
   estimated_hours?: number;
 }
 
@@ -71,8 +71,8 @@ export interface UpdateTaskDto {
   assignee_id?: string;
   labels?: string[];
   tags?: string[];
-  due_date?: string;
-  start_date?: string;
+  due_date?: string; // ISO date string
+  start_date?: string; // ISO date string
   estimated_hours?: number;
 }
 

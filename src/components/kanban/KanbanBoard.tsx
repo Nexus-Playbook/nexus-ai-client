@@ -42,9 +42,10 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
   const loadTasks = async () => {
     try {
       setIsLoading(true);
-      const data = await apiClient.getTasks(teamId, projectId);
+      const data = await apiClient.getTasks(projectId);
       
-      // Convert kanban format to flat task array
+      // Backend returns kanban format: { todo: [], in_progress: [], done: [], blocked: [] }
+      // Convert to flat task array
       const allTasks = [
         ...(data.todo || []),
         ...(data.in_progress || []),

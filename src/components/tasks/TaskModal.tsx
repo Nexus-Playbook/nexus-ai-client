@@ -105,10 +105,18 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
           description: formData.description || undefined,
           status: formData.status,
           priority: formData.priority,
-          due_date: formData.due_date || undefined,
-          assignee_id: formData.assignee_id || undefined,
+          due_date: formData.due_date ? new Date(formData.due_date).toISOString() : undefined,
           tags: tags.length > 0 ? tags : undefined,
         };
+        
+        // Only add assignee_id if it's valid
+        if (formData.assignee_id && formData.assignee_id.trim()) {
+          const trimmedId = formData.assignee_id.trim();
+          if (/^[a-z0-9]{25}$/i.test(trimmedId)) {
+            updateData.assignee_id = trimmedId;
+          }
+        }
+        
         await onSave(updateData);
       } else {
         // Create new task
@@ -116,7 +124,6 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
           title: formData.title,
           status: formData.status,
           priority: formData.priority,
-          project_id: projectId,
         };
         
         // Add optional fields only if they have values
@@ -124,23 +131,39 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
           createData.description = formData.description.trim();
         }
         if (formData.due_date) {
-          createData.due_date = formData.due_date;
+          // Convert date string to ISO DateTime format for backend
+          createData.due_date = new Date(formData.due_date).toISOString();
         }
-        if (formData.assignee_id) {
-          createData.assignee_id = formData.assignee_id;
+        // Only add assignee_id if it's a valid user ID format (25-char cuid)
+        if (formData.assignee_id && formData.assignee_id.trim()) {
+          const trimmedId = formData.assignee_id.trim();
+          // Validate it's a proper user ID format (25 lowercase alphanumeric)
+          if (/^[a-z0-9]{25}$/i.test(trimmedId)) {
+            createData.assignee_id = trimmedId;
+          } else {
+            console.warn('Invalid assignee_id format, skipping:', trimmedId);
+          }
         }
         if (tags.length > 0) {
           createData.tags = tags;
         }
+        // Only add project_id if it's provided and valid (24-char hex = MongoDB ObjectId)
+        if (projectId && /^[a-f\d]{24}$/i.test(projectId)) {
+          createData.project_id = projectId;
+        }
         
-        console.log('Creating task with data:', createData);
+        console.log('Creating task with data:', JSON.stringify(createData, null, 2));
+        console.log('Project ID:', projectId, 'Valid MongoDB ObjectId:', /^[a-f\d]{24}$/i.test(projectId));
+        
         await onSave(createData);
       }
       
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save task:', error);
-      setErrors({ submit: 'Failed to save task. Please try again.' });
+      console.error('Error response:', error?.response?.data);
+      const errorMsg = error?.response?.data?.message || error.message;
+      setErrors({ submit: `Failed to save task: ${errorMsg}` });
     } finally {
       setIsLoading(false);
     }
@@ -205,10 +228,10 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
           />
 
           <Input
-            label="Assigned To"
+            label="Assigned To (optional)"
             value={formData.assignee_id}
             onChange={(e) => setFormData({ ...formData, assignee_id: e.target.value })}
-            placeholder="User ID"
+            placeholder="Leave empty or enter user ID"
           />
         </div>
 
