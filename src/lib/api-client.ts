@@ -100,8 +100,32 @@ class ApiClient {
     return response.data;
   }
 
-  async register(email: string, password: string, name: string) {
-    const response = await this.authClient.post('/auth/signup', { email, password, name });
+  async register(data: {
+    email: string;
+    password: string;
+    name: string;
+    phoneNumber?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    termsAccepted: boolean;
+  }) {
+    const response = await this.authClient.post('/auth/signup', data);
+    return response.data;
+  }
+
+  async getProfile() {
+    const response = await this.authClient.get('/auth/me');
+    return response.data;
+  }
+
+  async updateProfile(data: {
+    name?: string;
+    phoneNumber?: string;
+    gender?: string;
+    dateOfBirth?: string;
+    avatarUrl?: string;
+  }) {
+    const response = await this.authClient.patch('/users/me', data);
     return response.data;
   }
 
@@ -110,8 +134,64 @@ class ApiClient {
     return response.data;
   }
 
+  // Fix #8: Add users management API endpoint
+  async getAllUsers() {
+    const response = await this.authClient.get('/users');
+    return response.data;
+  }
+
+  // OAuth methods
+  async loginWithGoogle() {
+    // Redirect to Google OAuth
+    window.location.href = `${this.authClient.defaults.baseURL}/auth/google`;
+  }
+
+  async loginWithGitHub() {
+    // Redirect to GitHub OAuth
+    window.location.href = `${this.authClient.defaults.baseURL}/auth/github`;
+  }
+
+  async logout() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      try {
+        await this.authClient.post('/auth/logout', { refreshToken });
+      } catch (error) {
+        console.warn('Logout request failed:', error);
+      }
+    }
+    // Clear tokens regardless
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+  }
+
   async getUserTeams() {
     const response = await this.authClient.get('/teams');
+    return response.data;
+  }
+
+  async createTeam(data: { name: string; description?: string }) {
+    const response = await this.authClient.post('/teams', data);
+    return response.data;
+  }
+
+  async getTeamMembers(teamId: string) {
+    const response = await this.authClient.get(`/teams/${teamId}/members`);
+    return response.data;
+  }
+
+  async inviteTeamMember(teamId: string, data: { email: string; role: string }) {
+    const response = await this.authClient.post(`/teams/${teamId}/invite`, data);
+    return response.data;
+  }
+
+  async updateTeamMemberRole(teamId: string, userId: string, role: string) {
+    const response = await this.authClient.patch(`/teams/${teamId}/members/${userId}`, { role });
+    return response.data;
+  }
+
+  async removeTeamMember(teamId: string, userId: string) {
+    const response = await this.authClient.delete(`/teams/${teamId}/members/${userId}`);
     return response.data;
   }
 
