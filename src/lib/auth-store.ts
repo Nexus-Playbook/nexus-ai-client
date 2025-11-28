@@ -1,82 +1,75 @@
 import { create } from 'zustand';
-import { User, AuthTokens } from '@/types';
+import { User, AuthTokens, RegisterData, LoginCredentials, Team } from '@/types';
 import { apiClient } from './api-client';
 
 interface AuthState {
   user: User | null;
+  teams: Team[];
+  currentTeam: Team | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
-  logout: () => void;
+  login: (credentials: LoginCredentials) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
+  logout: () => Promise<void>;
   loadUser: () => Promise<void>;
+  loadTeams: () => Promise<void>;
+  switchTeam: (teamId: string) => void;
+  updateProfile: (data: Partial<User>) => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  teams: [],
+  currentTeam: null,
   isAuthenticated: false,
   isLoading: true,
 
-  login: async (email: string, password: string) => {
+  login: async (credentials: LoginCredentials) => {
     try {
-      const data = await apiClient.login(email, password);
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
+      const response = await apiClient.login(credentials.email, credentials.password);
+      const { accessToken, refreshToken, user } = response;
       
-      // Backend returns user in login response
-      const userData = data.user;
-      
-      // Get user's teams to extract teamId
-      const teams = await apiClient.getUserTeams();
-      const primaryTeam = teams && teams.length > 0 ? teams[0] : null;
-      
-      const user: User = {
-        id: userData.id,
-        email: userData.email,
-        name: userData.metadata?.name || userData.email,
-        role: (userData.role || 'MEMBER').toLowerCase() as 'admin' | 'user',
-        teamId: primaryTeam?.id || undefined,
-      };
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
       
       set({ user, isAuthenticated: true, isLoading: false });
+      
+      // Load teams after successful login
+      await get().loadTeams();
     } catch (error) {
       console.error('Login failed:', error);
       throw error;
     }
   },
 
-  register: async (email: string, password: string, name: string) => {
+  register: async (data: RegisterData) => {
     try {
-      const data = await apiClient.register(email, password, name);
-      localStorage.setItem('accessToken', data.accessToken);
-      localStorage.setItem('refreshToken', data.refreshToken);
+      const response = await apiClient.register(data);
+      const { accessToken, refreshToken, user } = response;
       
-      // Backend returns user in signup response
-      const userData = data.user;
-      
-      // Get user's teams (auto-created on signup)
-      const teams = await apiClient.getUserTeams();
-      const primaryTeam = teams && teams.length > 0 ? teams[0] : null;
-      
-      const user: User = {
-        id: userData.id,
-        email: userData.email,
-        name: userData.metadata?.name || name,
-        role: (userData.role || 'MEMBER').toLowerCase() as 'admin' | 'user',
-        teamId: primaryTeam?.id || undefined,
-      };
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
       
       set({ user, isAuthenticated: true, isLoading: false });
+      
+      // Load teams after successful registration (auto-created team)
+      await get().loadTeams();
     } catch (error) {
       console.error('Registration failed:', error);
       throw error;
     }
   },
 
-  logout: () => {
+  logout: async () => {
+    try {
+      await apiClient.logout();
+    } catch (error) {
+      console.warn('Logout request failed:', error);
+    }
+    
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    set({ user: null, isAuthenticated: false });
+    set({ user: null, teams: [], currentTeam: null, isAuthenticated: false });
   },
 
   loadUser: async () => {
@@ -87,27 +80,50 @@ export const useAuthStore = create<AuthState>((set) => ({
         return;
       }
 
-      const userData = await apiClient.getCurrentUser();
-      const teams = await apiClient.getUserTeams();
-      const primaryTeam = teams && teams.length > 0 ? teams[0] : null;
-      
-      const user: User = {
-        id: userData.id,
-        email: userData.email,
-        name: userData.metadata?.name || userData.email,
-        role: (userData.role || 'MEMBER').toLowerCase() as 'admin' | 'user',
-        teamId: primaryTeam?.id || undefined,
-      };
+      const profile = await apiClient.getProfile();
+      const user = profile.user;
       
       set({ user, isAuthenticated: true, isLoading: false });
+      
+      // Load teams
+      await get().loadTeams();
     } catch (error: any) {
-      // Only log if it's not a "no token" scenario
       if (error?.response?.status !== 401) {
         console.error('Load user failed:', error);
       }
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
-      set({ user: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, teams: [], currentTeam: null, isAuthenticated: false, isLoading: false });
+    }
+  },
+
+  loadTeams: async () => {
+    try {
+      const teams = await apiClient.getUserTeams();
+      const currentTeam = teams.length > 0 ? teams[0] : null;
+      
+      set({ teams, currentTeam });
+    } catch (error) {
+      console.error('Load teams failed:', error);
+      set({ teams: [], currentTeam: null });
+    }
+  },
+
+  switchTeam: (teamId: string) => {
+    const { teams } = get();
+    const team = teams.find(t => t.id === teamId);
+    if (team) {
+      set({ currentTeam: team });
+    }
+  },
+
+  updateProfile: async (data: Partial<User>) => {
+    try {
+      const updatedUser = await apiClient.updateProfile(data);
+      set({ user: updatedUser });
+    } catch (error) {
+      console.error('Update profile failed:', error);
+      throw error;
     }
   },
 }));
