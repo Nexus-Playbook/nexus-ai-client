@@ -3,36 +3,27 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth-store';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
+import { LoginForm } from '@/components/auth/LoginForm';
+import { OAuthButtons } from '@/components/auth/OAuthButtons';
+import { LoginCredentials } from '@/types';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, register } = useAuthStore();
-  const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    name: '',
-  });
+  const { login } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (credentials: LoginCredentials) => {
     setError('');
     setIsLoading(true);
 
     try {
-      if (isLogin) {
-        await login(formData.email, formData.password);
-      } else {
-        await register(formData.email, formData.password, formData.name);
-      }
+      await login(credentials);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Authentication failed. Please try again.');
+      setError(err.response?.data?.message || 'Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -44,66 +35,27 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Nexus AI</h1>
           <p className="mt-2 text-sm text-gray-600">
-            {isLogin ? 'Sign in to your account' : 'Create a new account'}
+            Sign in to your account
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && (
-            <Input
-              label="Name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="John Doe"
-              required
-            />
-          )}
+        {/* OAuth Buttons */}
+        <OAuthButtons />
 
-          <Input
-            label="Email"
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            placeholder="you@example.com"
-            required
-          />
-
-          <Input
-            label="Password"
-            type="password"
-            value={formData.password}
-            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-            placeholder="••••••••"
-            required
-          />
-
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-600">{error}</p>
-            </div>
-          )}
-
-          <Button
-            type="submit"
-            className="w-full"
-            isLoading={isLoading}
-          >
-            {isLogin ? 'Sign In' : 'Sign Up'}
-          </Button>
-        </form>
+        {/* Login Form */}
+        <LoginForm
+          onSubmit={handleLogin}
+          isLoading={isLoading}
+          error={error}
+        />
 
         <div className="mt-6 text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setIsLogin(!isLogin);
-              setError('');
-            }}
+          <Link
+            href="/signup"
             className="text-sm text-primary-600 hover:text-primary-700 font-medium"
           >
-            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-          </button>
+            Don't have an account? Sign up
+          </Link>
         </div>
       </Card>
     </div>
