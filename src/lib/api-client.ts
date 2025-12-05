@@ -10,6 +10,7 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true, // Enable sending/receiving httpOnly cookies
     });
 
     this.taskClient = axios.create({
@@ -17,15 +18,19 @@ class ApiClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true, // Enable sending/receiving httpOnly cookies
     });
 
     // Add auth interceptor for task client
+    // Note: For OAuth users, tokens are in httpOnly cookies (sent automatically)
+    // This interceptor handles legacy localStorage tokens for backward compatibility
     this.taskClient.interceptors.request.use(
       (config) => {
         const token = this.getAccessToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        // If no token in localStorage, cookies will be sent automatically via withCredentials
         return config;
       },
       (error) => Promise.reject(error)
@@ -38,6 +43,7 @@ class ApiClient {
         if (token && !config.url?.includes('/login') && !config.url?.includes('/signup')) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        // OAuth users: cookies sent automatically via withCredentials
         return config;
       },
       (error) => Promise.reject(error)
@@ -47,7 +53,7 @@ class ApiClient {
     this.taskClient.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as any;
+        const originalRequest = error.config as AxiosError['config'] & { _retry?: boolean };
         
         // Prevent infinite retry loop
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -77,30 +83,34 @@ class ApiClient {
     );
   }
 
+  /**
+   * Get access token from httpOnly cookie (server handles this automatically)
+   * For OAuth flows, cookies are set by backend
+   * @deprecated - Tokens now in httpOnly cookies, not localStorage
+   */
   private getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    // Check both localStorage (persistent) and sessionStorage (temporary) for tokens
+    
+    // Legacy fallback: Check localStorage for backward compatibility
+    // This will be empty for OAuth users (cookies only)
     return localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
   }
 
+  /**
+   * Refresh tokens using httpOnly cookies
+   * Backend reads refreshToken from cookie automatically
+   */
   private async refreshAccessToken(): Promise<boolean> {
     try {
-      // Check both storage locations for refresh token
-      const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
-      if (!refreshToken) return false;
-
-      const response = await this.authClient.post('/auth/refresh', { refreshToken });
-      const { accessToken } = response.data;
+      // No need to send refreshToken in body - it's in httpOnly cookie
+      // Backend will read it via cookie-parser middleware
+      const response = await this.authClient.post('/auth/refresh', {});
       
-      // Store new token in the same location as the refresh token
-      if (localStorage.getItem('refreshToken')) {
-        localStorage.setItem('accessToken', accessToken);
-      } else {
-        sessionStorage.setItem('accessToken', accessToken);
-      }
-      
-      return true;
-    } catch (error) {
+      // Backend sets new accessToken cookie in response
+      // No need to store in localStorage anymore
+      return response.status === 200;
+    } catch {
+      // Refresh failed - cookies expired or invalid
       return false;
     }
   }
@@ -210,8 +220,9 @@ class ApiClient {
   }
 
   // Task endpoints
-  async getTasks(teamId: string, projectId?: string) {
+  async getTasks() {
     // Use kanban endpoint which returns tasks organized by status
+    // Note: Future enhancement will add teamId and projectId filtering
     const response = await this.taskClient.get('/tasks/kanban');
     return response.data;
   }
@@ -221,13 +232,29 @@ class ApiClient {
     return response.data;
   }
 
-  async createTask(data: any) {
+  async createTask(data: {
+    title: string;
+    description?: string;
+    status?: string;
+    priority?: number;
+    assignee_id?: string;
+    project_id?: string;
+    labels?: string[];
+    due_date?: string;
+  }) {
     console.log('API Client creating task with:', data);
     const response = await this.taskClient.post('/tasks', data);
     return response.data;
   }
 
-  async updateTask(id: string, data: any) {
+  async updateTask(id: string, data: Partial<{
+    title: string;
+    description: string;
+    status: string;
+    priority: number;
+    assignee_id: string;
+    position: number;
+  }>) {
     const response = await this.taskClient.patch(`/tasks/${id}`, data);
     return response.data;
   }
@@ -248,12 +275,19 @@ class ApiClient {
     return response.data;
   }
 
-  async createProject(data: any) {
+  async createProject(data: {
+    name: string;
+    description?: string;
+    team_id: string;
+  }) {
     const response = await this.taskClient.post('/projects', data);
     return response.data;
   }
 
-  async updateProject(id: string, data: any) {
+  async updateProject(id: string, data: Partial<{
+    name: string;
+    description: string;
+  }>) {
     const response = await this.taskClient.patch(`/projects/${id}`, data);
     return response.data;
   }
