@@ -8,7 +8,7 @@ export interface User {
   name: string;
   phoneNumber?: string;
   gender?: Gender;
-  dateOfBirth?: string;
+  dateOfBirth?: string; // Format: YYYY-MM-DD
   role: UserRole;
   avatarUrl?: string;
   isActive: boolean;
@@ -17,7 +17,7 @@ export interface User {
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
-  assignedTasks?: Task[];
+  // Note: Fetch assigned tasks via GET /tasks?assignee_id={userId} to avoid payload bloat
 }
 
 export type TeamPlan = 'FREE' | 'STARTER' | 'PRO' | 'ENTERPRISE';
@@ -31,12 +31,11 @@ export interface TeamMember {
   assignedBy: string;
   joinedAt: string;
   updatedAt: string;
-  user: {
+  // Optional: Minimal user data for UI. Fetch full user separately to avoid stale data.
+  user?: {
     id: string;
-    email: string;
     name: string;
     avatarUrl?: string;
-    role: UserRole;
   };
 }
 
@@ -50,7 +49,7 @@ export interface Team {
   createdAt: string;
   updatedAt: string;
   billingCustomerId?: string;
-  members?: TeamMember[];
+  memberCount?: number; // Count only. Fetch members via GET /teams/:id/members (paginated)
 }
 
 export interface Project {
@@ -59,8 +58,8 @@ export interface Project {
   description?: string;
   team_id: string;
   created_by: string;
-  settings?: any;
-  task_count?: number;
+  settings?: Record<string, unknown>;
+  task_count?: number; // Computed via aggregation - never written directly
   created_at: string;
   updated_at: string;
 }
@@ -78,15 +77,21 @@ export interface Task {
   team_id: string;
   assignee_id?: string;
   created_by: string;
-  labels?: string[];
-  tags?: string[];
+  labels?: string[]; // Max 10 labels for categorization (e.g., bug, frontend, urgent)
   due_date?: string;
   start_date?: string;
   estimated_hours?: number;
-  position: number;
+  position: number; // For drag-drop ordering within status column. Backend recalculates on reorder.
   completed_at?: string;
   created_at: string;
   updated_at: string;
+  // Optional fields from backend
+  history?: Array<{
+    action: string;
+    user_id: string;
+    timestamp: string;
+    changes: Array<{ field: string; old_value: unknown; new_value: unknown }>;
+  }>;
 }
 
 export interface CreateTaskDto {
@@ -96,8 +101,7 @@ export interface CreateTaskDto {
   priority?: TaskPriority;
   project_id?: string;
   assignee_id?: string;
-  labels?: string[];
-  tags?: string[];
+  labels?: string[]; // Max 10 labels
   due_date?: string; // ISO date string
   start_date?: string; // ISO date string
   estimated_hours?: number;
@@ -109,8 +113,7 @@ export interface UpdateTaskDto {
   status?: TaskStatus;
   priority?: TaskPriority;
   assignee_id?: string;
-  labels?: string[];
-  tags?: string[];
+  labels?: string[]; // Max 10 labels
   due_date?: string; // ISO date string
   start_date?: string; // ISO date string
   estimated_hours?: number;
@@ -134,7 +137,7 @@ export interface RegisterData {
   name: string;
   phoneNumber?: string;
   gender?: Gender;
-  dateOfBirth?: string;
+  dateOfBirth?: string; // Format: YYYY-MM-DD
   termsAccepted: boolean;
 }
 
@@ -144,7 +147,7 @@ export interface UserProfile {
   name: string;
   phoneNumber?: string;
   gender?: Gender;
-  dateOfBirth?: string;
+  dateOfBirth?: string; // Format: YYYY-MM-DD
   role: UserRole;
   avatarUrl?: string;
   isActive: boolean;
