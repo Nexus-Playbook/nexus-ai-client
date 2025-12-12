@@ -15,7 +15,6 @@ interface TaskModalProps {
   task?: Task;
   defaultStatus?: TaskStatus;
   projectId: string;
-  teamId: string;
 }
 
 const statusOptions = [
@@ -33,7 +32,7 @@ const priorityOptions = [
   { value: '5', label: 'Lowest' },
 ];
 
-export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projectId, teamId }: TaskModalProps) {
+export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projectId }: TaskModalProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -41,7 +40,7 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
     priority: 3 as TaskPriority, // Default to Medium
     due_date: '',
     assignee_id: '',
-    tags: '',
+    labels: '', // Comma-separated labels (max 10)
   });
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -55,7 +54,7 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
         priority: task.priority,
         due_date: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '',
         assignee_id: task.assignee_id || '',
-        tags: task.tags?.join(', ') || '',
+        labels: task.labels?.join(', ') || '',
       });
     } else {
       setFormData({
@@ -65,7 +64,7 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
         priority: 3, // Medium
         due_date: '',
         assignee_id: '',
-        tags: '',
+        labels: '',
       });
     }
     setErrors({});
@@ -93,10 +92,11 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
 
     setIsLoading(true);
     try {
-      const tags = formData.tags
+      const labels = formData.labels
         .split(',')
-        .map(tag => tag.trim())
-        .filter(tag => tag.length > 0);
+        .map(label => label.trim())
+        .filter(label => label.length > 0)
+        .slice(0, 10); // Max 10 labels per spec
 
       if (task) {
         // Update existing task
@@ -106,7 +106,7 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
           status: formData.status,
           priority: formData.priority,
           due_date: formData.due_date ? new Date(formData.due_date).toISOString() : undefined,
-          tags: tags.length > 0 ? tags : undefined,
+          labels: labels.length > 0 ? labels : undefined,
         };
         
         // Only add assignee_id if it's valid
@@ -144,8 +144,8 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
             console.warn('Invalid assignee_id format, skipping:', trimmedId);
           }
         }
-        if (tags.length > 0) {
-          createData.tags = tags;
+        if (labels.length > 0) {
+          createData.labels = labels;
         }
         // Only add project_id if it's provided and valid (24-char hex = MongoDB ObjectId)
         if (projectId && /^[a-f\d]{24}$/i.test(projectId)) {
@@ -159,10 +159,11 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
       }
       
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to save task:', error);
-      console.error('Error response:', error?.response?.data);
-      const errorMsg = error?.response?.data?.message || error.message;
+      const err = error as { response?: { data?: { message?: string } }; message?: string };
+      console.error('Error response:', err?.response?.data);
+      const errorMsg = err?.response?.data?.message || err?.message || 'Unknown error';
       setErrors({ submit: `Failed to save task: ${errorMsg}` });
     } finally {
       setIsLoading(false);
@@ -236,10 +237,10 @@ export function TaskModal({ isOpen, onClose, onSave, task, defaultStatus, projec
         </div>
 
         <Input
-          label="Tags"
-          value={formData.tags}
-          onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
-          placeholder="frontend, bug, urgent (comma-separated)"
+          label="Labels (max 10)"
+          value={formData.labels}
+          onChange={(e) => setFormData({ ...formData, labels: e.target.value })}
+          placeholder="bug, frontend, urgent (comma-separated)"
         />
 
         {errors.submit && (
