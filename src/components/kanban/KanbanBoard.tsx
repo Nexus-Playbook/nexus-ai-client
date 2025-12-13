@@ -42,10 +42,10 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
   const loadTasks = async () => {
     try {
       setIsLoading(true);
+      // Backend /tasks/kanban returns: { todo: [], in_progress: [], done: [], blocked: [] }
       const data = await apiClient.getTasks(projectId);
       
-      // Backend returns kanban format: { todo: [], in_progress: [], done: [], blocked: [] }
-      // Convert to flat task array
+      // Convert kanban format to flat task array
       const allTasks = [
         ...(data.todo || []),
         ...(data.in_progress || []),
@@ -56,6 +56,7 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
       setTasks(allTasks);
     } catch (error) {
       console.error('Failed to load tasks:', error);
+      setTasks([]);
     } finally {
       setIsLoading(false);
     }
@@ -63,6 +64,7 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
 
   useEffect(() => {
     loadTasks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId, projectId]);
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -211,7 +213,6 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
         task={selectedTask || undefined}
         defaultStatus={defaultStatus}
         projectId={projectId}
-        teamId={teamId}
       />
     </div>
   );
