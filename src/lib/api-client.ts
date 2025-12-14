@@ -220,10 +220,10 @@ class ApiClient {
   }
 
   // Task endpoints
-  async getTasks() {
+  async getTasks(projectId?: string) {
     // Use kanban endpoint which returns tasks organized by status
-    // Note: Future enhancement will add teamId and projectId filtering
-    const response = await this.taskClient.get('/tasks/kanban');
+    const params = projectId ? `?project_id=${projectId}` : '';
+    const response = await this.taskClient.get(`/tasks/kanban${params}`);
     return response.data;
   }
 
@@ -242,6 +242,7 @@ class ApiClient {
     labels?: string[];
     due_date?: string;
   }) {
+    // team_id is extracted from JWT token by backend, not sent in body
     console.log('API Client creating task with:', data);
     const response = await this.taskClient.post('/tasks', data);
     return response.data;
@@ -278,8 +279,8 @@ class ApiClient {
   async createProject(data: {
     name: string;
     description?: string;
-    team_id: string;
   }) {
+    // team_id is extracted from JWT token by backend, not sent in body
     const response = await this.taskClient.post('/projects', data);
     return response.data;
   }
