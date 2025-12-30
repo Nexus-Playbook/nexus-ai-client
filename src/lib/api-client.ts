@@ -67,6 +67,8 @@ class ApiClient {
             console.error('Token refresh failed, redirecting to login');
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
+            sessionStorage.removeItem('accessToken');
+            sessionStorage.removeItem('refreshToken');
             window.location.href = '/login';
           }
         }
@@ -77,17 +79,26 @@ class ApiClient {
 
   private getAccessToken(): string | null {
     if (typeof window === 'undefined') return null;
-    return localStorage.getItem('accessToken');
+    // Check both localStorage (persistent) and sessionStorage (temporary) for tokens
+    return localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
   }
 
   private async refreshAccessToken(): Promise<boolean> {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
+      // Check both storage locations for refresh token
+      const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
       if (!refreshToken) return false;
 
       const response = await this.authClient.post('/auth/refresh', { refreshToken });
       const { accessToken } = response.data;
-      localStorage.setItem('accessToken', accessToken);
+      
+      // Store new token in the same location as the refresh token
+      if (localStorage.getItem('refreshToken')) {
+        localStorage.setItem('accessToken', accessToken);
+      } else {
+        sessionStorage.setItem('accessToken', accessToken);
+      }
+      
       return true;
     } catch (error) {
       return false;
@@ -152,7 +163,8 @@ class ApiClient {
   }
 
   async logout() {
-    const refreshToken = localStorage.getItem('refreshToken');
+    // Check both storage locations for refresh token
+    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
     if (refreshToken) {
       try {
         await this.authClient.post('/auth/logout', { refreshToken });
@@ -160,9 +172,11 @@ class ApiClient {
         console.warn('Logout request failed:', error);
       }
     }
-    // Clear tokens regardless
+    // Clear tokens from both storage locations regardless
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('refreshToken');
   }
 
   async getUserTeams() {

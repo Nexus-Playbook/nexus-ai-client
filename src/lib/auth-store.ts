@@ -29,8 +29,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const response = await apiClient.login(credentials.email, credentials.password);
       const { accessToken, refreshToken, user } = response;
       
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
+      // Use localStorage for persistent storage when "Remember Me" is checked,
+      // sessionStorage for temporary storage when unchecked
+      const storage = credentials.rememberMe ? localStorage : sessionStorage;
+      storage.setItem('accessToken', accessToken);
+      storage.setItem('refreshToken', refreshToken);
+      
+      // Clear tokens from the other storage to avoid conflicts
+      const otherStorage = credentials.rememberMe ? sessionStorage : localStorage;
+      otherStorage.removeItem('accessToken');
+      otherStorage.removeItem('refreshToken');
       
       set({ user, isAuthenticated: true, isLoading: false });
       
@@ -67,14 +75,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn('Logout request failed:', error);
     }
     
+    // Clear tokens from both storage locations
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    sessionStorage.removeItem('accessToken');
+    sessionStorage.removeItem('refreshToken');
     set({ user: null, teams: [], currentTeam: null, isAuthenticated: false });
   },
 
   loadUser: async () => {
     try {
-      const token = localStorage.getItem('accessToken');
+      // Check both localStorage (persistent) and sessionStorage (temporary) for tokens
+      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
       if (!token) {
         set({ isLoading: false, isAuthenticated: false });
         return;
@@ -91,8 +103,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (error?.response?.status !== 401) {
         console.error('Load user failed:', error);
       }
+      // Clear tokens from both storage locations
       localStorage.removeItem('accessToken');
       localStorage.removeItem('refreshToken');
+      sessionStorage.removeItem('accessToken');
+      sessionStorage.removeItem('refreshToken');
       set({ user: null, teams: [], currentTeam: null, isAuthenticated: false, isLoading: false });
     }
   },

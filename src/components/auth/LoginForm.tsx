@@ -15,6 +15,7 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
   const [formData, setFormData] = useState<LoginCredentials>({
     email: '',
     password: '',
+    rememberMe: false,
   });
 
   const [errors, setErrors] = useState<Partial<Record<keyof LoginCredentials, string>>>({});
@@ -76,6 +77,8 @@ export function LoginForm({ onSubmit, isLoading, error }: LoginFormProps) {
             id="remember-me"
             name="remember-me"
             type="checkbox"
+            checked={formData.rememberMe}
+            onChange={(e) => setFormData({ ...formData, rememberMe: e.target.checked })}
             className="h-4 w-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
           />
           <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700">
