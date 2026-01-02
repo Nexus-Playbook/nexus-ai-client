@@ -17,6 +17,7 @@ import { TaskModal } from '../tasks/TaskModal';
 import { apiClient } from '@/lib/api-client';
 import { Button } from '../ui/Button';
 import { RefreshCw, Plus } from 'lucide-react';
+import { useRealtimeSync, TaskEvent, TaskEventType } from '@/hooks/useRealtimeSync';
 
 interface KanbanBoardProps {
   teamId: string;
@@ -62,6 +63,71 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
     }
   };
 
+  /**
+   * Dedicated sync method for reconnect fallback (separate from loadTasks for SoC)
+   * Enables future delta sync optimization (?since=lastSyncTimestamp)
+   */
+  const syncAfterReconnect = async () => {
+    try {
+      console.log('🔄 Syncing tasks after WebSocket reconnect...');
+      // For MVP: Full refetch (optimize later with ?since=timestamp)
+      const data = await apiClient.getTasks(projectId);
+      const allTasks = [
+        ...(data.todo || []),
+        ...(data.in_progress || []),
+        ...(data.done || []),
+        ...(data.blocked || [])
+      ];
+      setTasks(allTasks);
+      console.log('✅ Sync complete');
+    } catch (error) {
+      console.error('❌ Reconnect sync failed:', error);
+    }
+  };
+
+  /**
+   * Handle realtime task events from WebSocket
+   */
+  const handleTaskEvent = (event: TaskEvent) => {
+    switch (event.eventType) {
+      case TaskEventType.TASK_CREATED:
+        if (event.payload.task) {
+          setTasks(prev => [...prev, event.payload.task as unknown as Task]);
+        }
+        break;
+
+      case TaskEventType.TASK_UPDATED:
+        setTasks(prev =>
+          prev.map(t =>
+            t.id === event.payload.taskId
+              ? { ...t, ...(event.payload.changes || {}), ...(event.payload.task || {}) }
+              : t
+          )
+        );
+        break;
+
+      case TaskEventType.TASK_DELETED:
+        setTasks(prev => prev.filter(t => t.id !== event.payload.taskId));
+        break;
+
+      case TaskEventType.TASK_RESTORED:
+        if (event.payload.task) {
+          setTasks(prev => [...prev, event.payload.task as unknown as Task]);
+        }
+        break;
+
+      default:
+        console.warn('Unknown event type:', event.eventType);
+    }
+  };
+
+  // Realtime WebSocket connection
+  const { isConnected } = useRealtimeSync({
+    teamId,
+    onTaskEvent: handleTaskEvent,
+    onReconnect: syncAfterReconnect,
+  });
+
   useEffect(() => {
     loadTasks();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -86,6 +152,9 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
     const newStatus = over.id as TaskStatus;
 
     if (task && task.status !== newStatus) {
+      // Capture original state for revert
+      const previousTasks = tasks;
+      
       // Optimistic update
       setTasks(tasks.map(t => 
         t.id === task.id ? { ...t, status: newStatus } : t
@@ -93,10 +162,11 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
 
       try {
         await apiClient.updateTask(task.id, { status: newStatus });
+        // Note: Don't refetch - rely on WebSocket event for sync
       } catch (error) {
         console.error('Failed to update task:', error);
-        // Revert on error
-        setTasks(tasks);
+        // Revert to captured state
+        setTasks(previousTasks);
       }
     }
 
@@ -119,11 +189,12 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
       if (selectedTask) {
         // Update existing task
         await apiClient.updateTask(selectedTask.id, data as UpdateTaskDto);
+        // Note: Don't refetch - rely on WebSocket event for sync
       } else {
         // Create new task
         await apiClient.createTask(data as CreateTaskDto);
+        // Note: Don't refetch - rely on WebSocket event for sync
       }
-      await loadTasks();
     } catch (error) {
       console.error('Failed to save task:', error);
       throw error;
@@ -150,6 +221,10 @@ export function KanbanBoard({ teamId, projectId }: KanbanBoardProps) {
           <h1 className="text-2xl font-bold text-gray-900">Task Board</h1>
           <p className="text-sm text-gray-600 mt-1">
             {tasks.length} task{tasks.length !== 1 ? 's' : ''} total
+            {' • '}
+            <span className={isConnected ? 'text-green-600' : 'text-red-600'}>
+              {isConnected ? '🟢 Live' : '🔴 Offline'}
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-3">
