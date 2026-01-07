@@ -23,7 +23,25 @@ export default function SignupPage() {
       await register(data);
       router.push('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+      
+      // Check if it's an OAuth email collision error
+      try {
+        const parsed = JSON.parse(errorMessage);
+        if (parsed.code === 'EMAIL_EXISTS_OAUTH') {
+          // Redirect to link page or show helpful message
+          const provider = parsed.existingProvider?.toLowerCase() || 'oauth';
+          setError(
+            `This email is already registered with ${parsed.existingProvider}. ` +
+            `Please sign in with ${parsed.existingProvider} or use the OAuth button above to link your account.`
+          );
+          return;
+        }
+      } catch {
+        // Not a JSON error, use the message as-is
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

@@ -33,7 +33,23 @@ function LoginPageContent() {
       router.push('/dashboard');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      setError(error.response?.data?.message || 'Login failed. Please try again.');
+      const errorMessage = error.response?.data?.message || 'Login failed. Please try again.';
+      
+      // Check if it's an OAuth-only account error
+      try {
+        const parsed = JSON.parse(errorMessage);
+        if (parsed.code === 'OAUTH_ONLY_ACCOUNT') {
+          setError(
+            `This account was created with ${parsed.provider}. ` +
+            `Please use the "${parsed.provider}" button above to sign in.`
+          );
+          return;
+        }
+      } catch {
+        // Not a JSON error, use the message as-is
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
