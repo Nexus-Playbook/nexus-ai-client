@@ -11,8 +11,7 @@ function AuthCallbackContent() {
 
   useEffect(() => {
     const handleAuthCallback = async () => {
-      const token = searchParams.get('token');
-      const refreshToken = searchParams.get('refresh');
+      const success = searchParams.get('success');
       const error = searchParams.get('error');
 
       if (error) {
@@ -21,12 +20,8 @@ function AuthCallbackContent() {
         return;
       }
 
-      if (token && refreshToken) {
-        // Store tokens from OAuth callback
-        localStorage.setItem('accessToken', token);
-        localStorage.setItem('refreshToken', refreshToken);
-        
-        // Load user data
+      if (success === 'true') {
+        // Tokens are in httpOnly cookies - just load user
         try {
           await loadUser();
           router.push('/dashboard');

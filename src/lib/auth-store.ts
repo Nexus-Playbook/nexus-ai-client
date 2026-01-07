@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { User, AuthTokens, RegisterData, LoginCredentials, Team } from '@/types';
+import { User, RegisterData, LoginCredentials, Team } from '@/types';
 import { apiClient } from './api-client';
 
 interface AuthState {
@@ -27,19 +27,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (credentials: LoginCredentials) => {
     try {
       const response = await apiClient.login(credentials.email, credentials.password);
-      const { accessToken, refreshToken, user } = response;
+      const { user } = response;
       
-      // Use localStorage for persistent storage when "Remember Me" is checked,
-      // sessionStorage for temporary storage when unchecked
-      const storage = credentials.rememberMe ? localStorage : sessionStorage;
-      storage.setItem('accessToken', accessToken);
-      storage.setItem('refreshToken', refreshToken);
-      
-      // Clear tokens from the other storage to avoid conflicts
-      const otherStorage = credentials.rememberMe ? sessionStorage : localStorage;
-      otherStorage.removeItem('accessToken');
-      otherStorage.removeItem('refreshToken');
-      
+      // Tokens are now in httpOnly cookies - no need to store in localStorage
       set({ user, isAuthenticated: true, isLoading: false });
       
       // Load teams after successful login
@@ -53,11 +43,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (data: RegisterData) => {
     try {
       const response = await apiClient.register(data);
-      const { accessToken, refreshToken, user } = response;
+      const { user } = response;
       
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-      
+      // Tokens are now in httpOnly cookies - no need to store in localStorage
       set({ user, isAuthenticated: true, isLoading: false });
       
       // Load teams after successful registration (auto-created team)
@@ -75,23 +63,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       console.warn('Logout request failed:', error);
     }
     
-    // Clear tokens from both storage locations
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    sessionStorage.removeItem('accessToken');
-    sessionStorage.removeItem('refreshToken');
+    // Cookies are cleared by backend - just clear local state
     set({ user: null, teams: [], currentTeam: null, isAuthenticated: false });
   },
 
   loadUser: async () => {
     try {
-      // Check both localStorage (persistent) and sessionStorage (temporary) for tokens
-      const token = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
-      if (!token) {
-        set({ isLoading: false, isAuthenticated: false });
-        return;
-      }
-
+      // Tokens are in httpOnly cookies - automatically sent with request
       const profile = await apiClient.getProfile();
       const user = profile.user;
       
@@ -99,16 +77,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       // Load teams
       await get().loadTeams();
-    } catch (error: any) {
-      if (error?.response?.status !== 401) {
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { status?: number } };
+      if (axiosError.response?.status !== 401) {
         console.error('Load user failed:', error);
       }
-      // Clear tokens from both storage locations
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      sessionStorage.removeItem('accessToken');
-      sessionStorage.removeItem('refreshToken');
-      set({ user: null, teams: [], currentTeam: null, isAuthenticated: false, isLoading: false });
+      // No tokens to clear - cookies handled by backend
+      set({ user: null, isAuthenticated: false, isLoading: false });
     }
   },
 

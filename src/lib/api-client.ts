@@ -22,28 +22,20 @@ class ApiClient {
     });
 
     // Add auth interceptor for task client
-    // Note: For OAuth users, tokens are in httpOnly cookies (sent automatically)
-    // This interceptor handles legacy localStorage tokens for backward compatibility
+    // Tokens are in httpOnly cookies - sent automatically via withCredentials
     this.taskClient.interceptors.request.use(
       (config) => {
-        const token = this.getAccessToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        // If no token in localStorage, cookies will be sent automatically via withCredentials
+        // Cookies sent automatically, no need to add headers
         return config;
       },
       (error) => Promise.reject(error)
     );
 
-    // Add auth interceptor for auth client (for protected routes)
+    // Add auth interceptor for auth client
+    // Tokens are in httpOnly cookies - sent automatically via withCredentials
     this.authClient.interceptors.request.use(
       (config) => {
-        const token = this.getAccessToken();
-        if (token && !config.url?.includes('/login') && !config.url?.includes('/signup')) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        // OAuth users: cookies sent automatically via withCredentials
+        // Cookies sent automatically, no need to add headers
         return config;
       },
       (error) => Promise.reject(error)
@@ -59,22 +51,16 @@ class ApiClient {
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           
-          // Token expired, try to refresh
+          // Token expired, try to refresh (uses httpOnly cookies)
           const refreshed = await this.refreshAccessToken();
           if (refreshed && originalRequest) {
-            // Update the auth header with new token
-            originalRequest.headers.Authorization = `Bearer ${this.getAccessToken()}`;
-            // Retry the original request
+            // Retry the original request (new cookie set by refresh endpoint)
             return this.taskClient.request(originalRequest);
           }
           
           // Refresh failed, redirect to login
           if (typeof window !== 'undefined') {
             console.error('Token refresh failed, redirecting to login');
-            localStorage.removeItem('accessToken');
-            localStorage.removeItem('refreshToken');
-            sessionStorage.removeItem('accessToken');
-            sessionStorage.removeItem('refreshToken');
             window.location.href = '/login';
           }
         }
@@ -84,33 +70,14 @@ class ApiClient {
   }
 
   /**
-   * Get access token from httpOnly cookie (server handles this automatically)
-   * For OAuth flows, cookies are set by backend
-   * @deprecated - Tokens now in httpOnly cookies, not localStorage
-   */
-  private getAccessToken(): string | null {
-    if (typeof window === 'undefined') return null;
-    
-    // Legacy fallback: Check localStorage for backward compatibility
-    // This will be empty for OAuth users (cookies only)
-    return localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
-  }
-
-  /**
    * Refresh tokens using httpOnly cookies
-   * Backend reads refreshToken from cookie automatically
+   * Backend reads refreshToken from cookie and sets new cookies
    */
   private async refreshAccessToken(): Promise<boolean> {
     try {
-      // No need to send refreshToken in body - it's in httpOnly cookie
-      // Backend will read it via cookie-parser middleware
       const response = await this.authClient.post('/auth/refresh', {});
-      
-      // Backend sets new accessToken cookie in response
-      // No need to store in localStorage anymore
       return response.status === 200;
     } catch {
-      // Refresh failed - cookies expired or invalid
       return false;
     }
   }
@@ -173,20 +140,12 @@ class ApiClient {
   }
 
   async logout() {
-    // Check both storage locations for refresh token
-    const refreshToken = localStorage.getItem('refreshToken') || sessionStorage.getItem('refreshToken');
-    if (refreshToken) {
-      try {
-        await this.authClient.post('/auth/logout', { refreshToken });
-      } catch (error) {
-        console.warn('Logout request failed:', error);
-      }
+    // Logout with cookie-based authentication
+    try {
+      await this.authClient.post('/auth/logout');
+    } catch (error) {
+      console.error('Logout failed:', error);
     }
-    // Clear tokens from both storage locations regardless
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    sessionStorage.removeItem('accessToken');
-    sessionStorage.removeItem('refreshToken');
   }
 
   async getUserTeams() {
@@ -196,11 +155,6 @@ class ApiClient {
 
   async createTeam(data: { name: string; description?: string }) {
     const response = await this.authClient.post('/teams', data);
-    return response.data;
-  }
-
-  async getTeamMembers(teamId: string) {
-    const response = await this.authClient.get(`/teams/${teamId}/members`);
     return response.data;
   }
 
