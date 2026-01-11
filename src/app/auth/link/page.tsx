@@ -26,13 +26,27 @@ function LinkPageContent() {
     setIsLinking(true);
 
     try {
-      // Redirect to OAuth link endpoint which sets consent cookie and redirects to OAuth
+      // SECURITY: Use POST to prevent CSRF attacks (GET with state changes is vulnerable)
+      // POST to collision-based linking endpoint which sets consent cookie and redirects to OAuth
       const authApiUrl = process.env.NEXT_PUBLIC_AUTH_API_URL || 'http://localhost:3001';
-      if (newProvider === 'GITHUB') {
-        window.location.href = `${authApiUrl}/auth/github/link?email=${encodeURIComponent(email || '')}`;
-      } else if (newProvider === 'GOOGLE') {
-        window.location.href = `${authApiUrl}/auth/google/link?email=${encodeURIComponent(email || '')}`;
-      }
+      const providerLower = newProvider?.toLowerCase() || '';
+      const linkUrl = `${authApiUrl}/auth/${providerLower}/link/collision`;
+      
+      // Use form POST to follow redirect naturally (OAuth flow requires browser redirect)
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = linkUrl;
+      form.style.display = 'none';
+      
+      // Add email as hidden input for collision-based linking
+      const emailInput = document.createElement('input');
+      emailInput.type = 'hidden';
+      emailInput.name = 'email';
+      emailInput.value = email || '';
+      form.appendChild(emailInput);
+      
+      document.body.appendChild(form);
+      form.submit();
     } catch {
       setError('Failed to link accounts. Please try again.');
       setIsLinking(false);
