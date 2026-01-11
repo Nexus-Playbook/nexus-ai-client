@@ -13,6 +13,27 @@ function AuthCallbackContent() {
     const handleAuthCallback = async () => {
       const success = searchParams.get('success');
       const error = searchParams.get('error');
+      const linked = searchParams.get('linked');
+      const provider = searchParams.get('provider');
+      const providerAlreadyLinked = searchParams.get('code') === 'PROVIDER_ALREADY_LINKED';
+      const providerAlreadyLinkedMessage = searchParams.get('message');
+
+      // Handle provider already linked to different user
+      if (providerAlreadyLinked && providerAlreadyLinkedMessage) {
+        // Check if this was user-initiated linking (from profile)
+        const wasUserInitiated = sessionStorage.getItem('oauth_linking_initiated') === 'true';
+        
+        if (wasUserInitiated) {
+          // Store error for UserProfile to display
+          sessionStorage.setItem('oauth_link_error', providerAlreadyLinkedMessage);
+          sessionStorage.removeItem('oauth_linking_initiated');
+          router.push('/dashboard?tab=profile');
+        } else {
+          // Collision-based linking - redirect to login
+          router.push(`/login?error=${encodeURIComponent(providerAlreadyLinkedMessage)}`);
+        }
+        return;
+      }
 
       if (error) {
         console.error('OAuth error:', error);
@@ -24,6 +45,14 @@ function AuthCallbackContent() {
         // Tokens are in httpOnly cookies - just load user
         try {
           await loadUser();
+          
+          // If this was a user-initiated linking, store success message
+          if (linked === 'true' && provider) {
+            const providerName = provider === 'GOOGLE' ? 'Google' : provider === 'GITHUB' ? 'GitHub' : provider;
+            sessionStorage.setItem('oauth_link_success', `Successfully linked your ${providerName} account! You can now sign in with ${providerName}.`);
+            sessionStorage.removeItem('oauth_linking_initiated');
+          }
+          
           router.push('/dashboard');
         } catch (error) {
           console.error('Failed to load user after OAuth:', error);
