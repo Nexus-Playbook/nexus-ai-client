@@ -139,6 +139,29 @@ class ApiClient {
     window.location.href = `${this.authClient.defaults.baseURL}/auth/github`;
   }
 
+  // Linked providers methods
+  async getLinkedProviders() {
+    const response = await this.authClient.get('/auth/linked-providers');
+    return response.data;
+  }
+
+  async linkProvider(userId: string, provider: 'GOOGLE' | 'GITHUB') {
+    // Mark that this is user-initiated linking (for error handling)
+    sessionStorage.setItem('oauth_linking_initiated', 'true');
+    // SECURITY: POST request prevents CSRF attacks (GET with state changes is vulnerable)
+    // userId comes from JWT session on backend, not from frontend
+    const providerLower = provider.toLowerCase();
+    const linkUrl = `${this.authClient.defaults.baseURL}/auth/${providerLower}/link`;
+    
+    // Use form POST to follow redirect naturally (OAuth flow requires browser redirect)
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = linkUrl;
+    form.style.display = 'none';
+    document.body.appendChild(form);
+    form.submit();
+  }
+
   async logout() {
     // Logout with cookie-based authentication
     try {
