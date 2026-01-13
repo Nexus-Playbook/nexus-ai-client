@@ -9,7 +9,7 @@ import { TeamDashboard } from '@/components/teams/TeamDashboard';
 import { TeamSwitcher } from '@/components/teams/TeamSwitcher';
 import { UserProfile } from '@/components/user/UserProfile';
 import { UserManagement } from '@/components/admin/UserManagement';
-import { PermissionGate, UserAvatar } from '@/components/ui/RoleComponents';
+import { UserAvatar } from '@/components/ui/RoleComponents';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
@@ -28,6 +28,7 @@ export default function DashboardPage() {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [projectForm, setProjectForm] = useState({ name: '', description: '' });
   const [creatingProject, setCreatingProject] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadUser();
@@ -73,7 +74,32 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTeam?.id]);
+
+  // Check for OAuth linking success message
+  useEffect(() => {
+    const linkSuccess = sessionStorage.getItem('oauth_link_success');
+    if (linkSuccess) {
+      setSuccessMessage(linkSuccess);
+      sessionStorage.removeItem('oauth_link_success');
+      // Auto-hide after 5 seconds
+      setTimeout(() => setSuccessMessage(null), 5000);
+    }
+  }, []);
+
+  // Check for tab parameter in URL (e.g., from OAuth callback redirect)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      if (tabParam === 'profile' && ['tasks', 'team', 'profile', 'users'].includes(tabParam)) {
+        setActiveTab(tabParam as 'tasks' | 'team' | 'profile' | 'users');
+        // Clean up URL
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+    }
+  }, []);
 
   const handleLogout = async () => {
     await logout();
@@ -95,9 +121,14 @@ export default function DashboardPage() {
       setProjectForm({ name: '', description: '' });
       setShowCreateProject(false);
       await loadProjects();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create project:', error);
-      alert(`Failed to create project: ${error?.response?.data?.message || error.message}`);
+      const errorMessage = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+        : error instanceof Error
+        ? error.message
+        : 'Unknown error';
+      alert(`Failed to create project: ${errorMessage || 'Unknown error'}`);
     } finally {
       setCreatingProject(false);
     }
@@ -126,6 +157,30 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Success Message Toast */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 z-50 max-w-md">
+          <div className="bg-green-50 border border-green-200 rounded-lg shadow-lg p-4 flex items-start space-x-3">
+            <div className="flex-shrink-0">
+              <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-green-800">{successMessage}</p>
+            </div>
+            <button
+              onClick={() => setSuccessMessage(null)}
+              className="flex-shrink-0 text-green-600 hover:text-green-800"
+            >
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
