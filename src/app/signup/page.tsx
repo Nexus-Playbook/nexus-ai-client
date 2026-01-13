@@ -22,8 +22,11 @@ export default function SignupPage() {
     try {
       await register(data);
       router.push('/dashboard');
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Registration failed. Please try again.';
+    } catch (err: unknown) {
+      const error = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { message?: string } } })
+        : null;
+      const errorMessage = error?.response?.data?.message || 'Registration failed. Please try again.';
       
       // Check if it's an OAuth email collision error
       try {
