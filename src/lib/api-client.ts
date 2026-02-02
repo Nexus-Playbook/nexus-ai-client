@@ -1,4 +1,5 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
+import { handleAuthError, notifyAuthError, redirectAfterAuthError } from './auth-error-handler';
 
 class ApiClient {
   private authClient: AxiosInstance;
@@ -41,7 +42,7 @@ class ApiClient {
       (error) => Promise.reject(error)
     );
 
-    // Add response interceptor for token refresh
+    // Add response interceptor for token refresh and error handling
     this.taskClient.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
@@ -58,10 +59,18 @@ class ApiClient {
             return this.taskClient.request(originalRequest);
           }
           
-          // Refresh failed, redirect to login
-          if (typeof window !== 'undefined') {
-            console.error('Token refresh failed, redirecting to login');
-            window.location.href = '/login';
+          // Refresh failed - handle with centralized error handler
+          const errorDetails = handleAuthError(error);
+          notifyAuthError(errorDetails);
+          redirectAfterAuthError(errorDetails);
+        } else {
+          // Non-401 errors or retry failed - handle with centralized handler
+          const errorDetails = handleAuthError(error);
+          notifyAuthError(errorDetails);
+          
+          // Only redirect for auth-specific errors
+          if (errorDetails.redirectTo) {
+            redirectAfterAuthError(errorDetails);
           }
         }
         return Promise.reject(error);
@@ -141,7 +150,7 @@ class ApiClient {
 
   // Linked providers methods
   async getLinkedProviders() {
-    const response = await this.authClient.get('/auth/linked-providers');
+    const response = await this.authClient.get('/api/auth/linked-providers');
     return response.data;
   }
 
@@ -151,7 +160,7 @@ class ApiClient {
     // SECURITY: POST request prevents CSRF attacks (GET with state changes is vulnerable)
     // userId comes from JWT session on backend, not from frontend
     const providerLower = provider.toLowerCase();
-    const linkUrl = `${this.authClient.defaults.baseURL}/auth/${providerLower}/link`;
+    const linkUrl = `${this.authClient.defaults.baseURL}/api/auth/${providerLower}/link`;
     
     // Use form POST to follow redirect naturally (OAuth flow requires browser redirect)
     const form = document.createElement('form');
@@ -160,6 +169,11 @@ class ApiClient {
     form.style.display = 'none';
     document.body.appendChild(form);
     form.submit();
+  }
+
+  async unlinkProvider(provider: 'GOOGLE' | 'GITHUB') {
+    const response = await this.authClient.post('/api/auth/unlink-provider', { provider });
+    return response.data;
   }
 
   async logout() {
