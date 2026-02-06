@@ -25,6 +25,17 @@ export interface AuthErrorDetails {
 }
 
 /**
+ * Type guard for error response data
+ */
+interface ErrorResponseData {
+  code?: string;
+  message?: string;
+  email?: string;
+  newProvider?: string;
+  [key: string]: unknown;
+}
+
+/**
  * Parse and handle authentication errors
  */
 export function handleAuthError(error: AxiosError | Error | unknown): AuthErrorDetails {
@@ -33,15 +44,20 @@ export function handleAuthError(error: AxiosError | Error | unknown): AuthErrorD
     return typeof err === 'object' && err !== null && 'isAxiosError' in err;
   };
 
+  // Type guard for error response data
+  const isErrorData = (data: unknown): data is ErrorResponseData => {
+    return typeof data === 'object' && data !== null;
+  };
+
   // Handle HTTP status codes (AxiosError)
   if (isAxiosError(error) && error.response) {
     const status = error.response.status;
-    const data = error.response.data;
+    const data = isErrorData(error.response.data) ? error.response.data : {};
 
     // 401 Unauthorized
     if (status === 401) {
       // Check if it's a specific auth error with code
-      if (data?.code === 'SESSION_EXPIRED' || data?.message?.includes('expired')) {
+      if (data.code === 'SESSION_EXPIRED' || data.message?.includes('expired')) {
         return {
           type: 'SESSION_EXPIRED',
           message: data.message || 'Your session has expired',
@@ -63,7 +79,7 @@ export function handleAuthError(error: AxiosError | Error | unknown): AuthErrorD
     // 403 Forbidden
     if (status === 403) {
       // Check for email verification requirement
-      if (data?.code === 'EMAIL_NOT_VERIFIED') {
+      if (data.code === 'EMAIL_NOT_VERIFIED') {
         return {
           type: 'EMAIL_NOT_VERIFIED',
           message: data.message || 'Email verification required',
@@ -82,7 +98,7 @@ export function handleAuthError(error: AxiosError | Error | unknown): AuthErrorD
     }
 
     // OAuth-specific errors (usually 400)
-    if (data?.code === 'PROVIDER_NOT_LINKED') {
+    if (data.code === 'PROVIDER_NOT_LINKED') {
       return {
         type: 'PROVIDER_NOT_LINKED',
         message: data.message || 'OAuth provider not linked',
@@ -92,7 +108,7 @@ export function handleAuthError(error: AxiosError | Error | unknown): AuthErrorD
       };
     }
 
-    if (data?.code === 'PROVIDER_ALREADY_LINKED') {
+    if (data.code === 'PROVIDER_ALREADY_LINKED') {
       return {
         type: 'PROVIDER_ALREADY_LINKED',
         message: data.message || 'OAuth provider already linked',
